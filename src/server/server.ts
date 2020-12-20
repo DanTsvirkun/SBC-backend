@@ -7,6 +7,7 @@ require("dotenv").config({ path: path.join(__dirname, "../../.env") });
 import authRouter from "../auth/auth.router";
 import projectRouter from "../REST-entities/project/project.router";
 import sprintRouter from "../REST-entities/sprint/sprint.router";
+import taskRouter from "../REST-entities/task/task.router";
 const swaggerDocument = require("../../swagger.json");
 
 export default class Server {
@@ -55,6 +56,7 @@ export default class Server {
     this.app.use("/auth", authRouter);
     this.app.use("/project", projectRouter);
     this.app.use("/sprint", sprintRouter);
+    this.app.use("/task", taskRouter);
     this.app.use(
       "/api-docs",
       swaggerUi.serve,

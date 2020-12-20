@@ -32,6 +32,7 @@ export interface ISprint extends Document {
   duration: number;
   startDate: string;
   endDate: string;
+  projectId: MongoDBObjectId;
   tasks: MongoDBObjectId[];
 }
 
@@ -40,6 +41,7 @@ export interface ISprintPopulated extends Document {
   duration: number;
   startDate: string;
   endDate: string;
+  projectId: MongoDBObjectId;
   tasks: ITask[];
 }
 

@@ -28,12 +28,13 @@ export const addSprint = async (req: Request, res: Response) => {
     Number(endDateArr[1]),
     Number(endDateArr[2])
   );
-  const startDate = endDateObj.minus({ days: duration }).toLocaleString();
+  const startDate = endDateObj.minus({ days: duration - 1 }).toLocaleString();
   const sprint = await SprintModel.create({
     title,
     startDate,
     endDate,
     duration,
+    projectId,
     tasks: [],
   });
   (project as IProjectPopulated).sprints.push(sprint as ISprintPopulated);

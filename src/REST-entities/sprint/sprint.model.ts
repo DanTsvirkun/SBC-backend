@@ -9,6 +9,7 @@ const sprintSchema = new Schema({
   duration: Number,
   startDate: String,
   endDate: String,
+  projectId: mongoose.Types.ObjectId,
   tasks: [{ type: mongoose.Types.ObjectId, ref: "Task" }],
 });
 

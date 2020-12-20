@@ -6,28 +6,32 @@ import {
   IProjectPopulated,
   ISprint,
   ISprintPopulated,
+  ITask,
 } from "../../helpers/typescript-helpers/interfaces";
 import Server from "../../server/server";
 import UserModel from "../user/user.model";
 import SessionModel from "../session/session.model";
 import ProjectModel from "../project/project.model";
 import SprintModel from "../sprint/sprint.model";
+import TaskModel from "../task/task.model";
 
-describe("Sprint router test suite", () => {
+describe("Task router test suite", () => {
   let app: Application;
   let response: Response;
   let secondResponse: Response;
   let thirdResponse: Response;
   let fourthResponse: Response;
+  let fifthResponse: Response;
   let createdSprint: ISprint | ISprintPopulated | null;
   let createdProject: IProject | IProjectPopulated | null;
-  let updatedProject: IProject | IProjectPopulated | null;
+  let updatedSprint: ISprint | ISprintPopulated | null;
+  let createdTask: ITask | null;
   let accessToken: string;
   let secondAccessToken: string;
 
   beforeAll(async () => {
     app = new Server().startForTesting();
-    const url = `mongodb://127.0.0.1/sprint`;
+    const url = `mongodb://127.0.0.1/task`;
     await mongoose.connect(url, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
@@ -45,14 +49,19 @@ describe("Sprint router test suite", () => {
       .post("/project")
       .set("Authorization", `Bearer ${accessToken}`)
       .send({ title: "Test", description: "Test" });
+    createdProject = await ProjectModel.findOne({ _id: thirdResponse.body.id });
+    fourthResponse = await supertest(app)
+      .post(`/sprint/${(createdProject as IProject)._id}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ title: "Test", endDate: "2020-12-31", duration: 3 });
+    createdSprint = await SprintModel.findOne({ _id: fourthResponse.body.id });
     await supertest(app)
       .post("/auth/register")
       .send({ email: "testt@email.com", password: "qwerty123" });
-    fourthResponse = await supertest(app)
+    fifthResponse = await supertest(app)
       .post("/auth/login")
       .send({ email: "testt@email.com", password: "qwerty123" });
-    secondAccessToken = fourthResponse.body.accessToken;
-    createdProject = await ProjectModel.findOne({ _id: thirdResponse.body.id });
+    secondAccessToken = fifthResponse.body.accessToken;
   });
 
   afterAll(async () => {
@@ -61,33 +70,27 @@ describe("Sprint router test suite", () => {
     await ProjectModel.deleteOne({
       _id: thirdResponse.body.id,
     });
+    await SprintModel.deleteOne({
+      _id: fourthResponse.body.id,
+    });
     await mongoose.connection.close();
   });
 
-  describe("POST /sprint", () => {
+  describe("POST /task", () => {
     let response: Response;
 
     const validReqBody = {
       title: "Test",
-      endDate: "2020-12-31",
-      duration: 1,
+      hoursPlanned: 1,
     };
 
     const invalidReqBody = {
       title: "Test",
-      endDate: "2020-12-31",
     };
 
     const secondInvalidReqBody = {
       title: "Test",
-      endDate: "2020-13-31",
-      duration: 1,
-    };
-
-    const thirdInvalidReqBody = {
-      title: "Test",
-      endDate: "2020-12-31",
-      duration: 0,
+      hoursPlanned: 0,
     };
 
     it("Init endpoint testing", () => {
@@ -97,12 +100,12 @@ describe("Sprint router test suite", () => {
     context("With validReqBody", () => {
       beforeAll(async () => {
         response = await supertest(app)
-          .post(`/sprint/${(createdProject as IProject)._id}`)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
           .set("Authorization", `Bearer ${accessToken}`)
           .send(validReqBody);
-        createdSprint = await SprintModel.findOne({ _id: response.body.id });
-        updatedProject = await ProjectModel.findOne({
-          _id: (createdProject as IProject)._id,
+        createdTask = await TaskModel.findOne({ _id: response.body.id });
+        updatedSprint = await SprintModel.findOne({
+          _id: (createdSprint as ISprint)._id,
         });
       });
 
@@ -113,28 +116,32 @@ describe("Sprint router test suite", () => {
       it("Should return an expected result", () => {
         expect(response.body).toEqual({
           title: validReqBody.title,
-          endDate: validReqBody.endDate,
-          duration: validReqBody.duration,
-          startDate: "2020-12-31",
-          id: (createdSprint as ISprint)._id.toString(),
+          hoursPlanned: validReqBody.hoursPlanned,
+          hoursWasted: 0,
+          hoursWastedPerDay: [
+            { currentDay: "2020-12-29", singleHoursWasted: 0 },
+            { currentDay: "2020-12-30", singleHoursWasted: 0 },
+            { currentDay: "2020-12-31", singleHoursWasted: 0 },
+          ],
+          id: (createdTask as ITask)._id.toString(),
         });
       });
 
-      it("Should create a new sprint in DB", () => {
-        expect(createdSprint).toBeTruthy();
+      it("Should create a new task in DB", () => {
+        expect(createdTask).toBeTruthy();
       });
 
-      it("Should add a new sprint to project in DB", () => {
-        expect((updatedProject as IProject).sprints[0]).toEqual(
-          (createdSprint as ISprint)._id
+      it("Should add a new task to sprint in DB", () => {
+        expect((updatedSprint as ISprint).tasks[0]).toEqual(
+          (createdTask as ITask)._id
         );
       });
     });
 
-    context("With invalidReqBody (no 'duration' provided)", () => {
+    context("With invalidReqBody (no 'hoursPlanned' provided)", () => {
       beforeAll(async () => {
         response = await supertest(app)
-          .post(`/sprint/${(createdProject as IProject)._id}`)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
           .set("Authorization", `Bearer ${accessToken}`)
           .send(invalidReqBody);
       });
@@ -143,15 +150,15 @@ describe("Sprint router test suite", () => {
         expect(response.status).toBe(400);
       });
 
-      it("Should say that 'duration' is required", () => {
-        expect(response.body.message).toBe('"duration" is required');
+      it("Should say that 'hoursPlanned' is required", () => {
+        expect(response.body.message).toBe('"hoursPlanned" is required');
       });
     });
 
-    context("With secondInvalidReqBody (no 'duration' provided)", () => {
+    context("With secondInvalidReqBody ('hoursPlanned' is below 1)", () => {
       beforeAll(async () => {
         response = await supertest(app)
-          .post(`/sprint/${(createdProject as IProject)._id}`)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
           .set("Authorization", `Bearer ${accessToken}`)
           .send(secondInvalidReqBody);
       });
@@ -160,35 +167,18 @@ describe("Sprint router test suite", () => {
         expect(response.status).toBe(400);
       });
 
-      it("Should say that 'date' is invalid", () => {
+      it("Should say that 'hoursPlanned' must be greater than or equal to 1", () => {
         expect(response.body.message).toBe(
-          "Invalid 'date'. Please, use YYYY-MM-DD string format"
-        );
-      });
-    });
-
-    context("With thirdInvalidReqBody ('duration' is below 1)", () => {
-      beforeAll(async () => {
-        response = await supertest(app)
-          .post(`/sprint/${(createdProject as IProject)._id}`)
-          .set("Authorization", `Bearer ${accessToken}`)
-          .send(thirdInvalidReqBody);
-      });
-
-      it("Should return a 400 status code", () => {
-        expect(response.status).toBe(400);
-      });
-
-      it("Should say that 'duration' must be greater than or equal to 1", () => {
-        expect(response.body.message).toBe(
-          '"duration" must be greater than or equal to 1'
+          '"hoursPlanned" must be greater than or equal to 1'
         );
       });
     });
 
     context("Without providing 'accessToken'", () => {
       beforeAll(async () => {
-        response = await supertest(app).post("/project").send(validReqBody);
+        response = await supertest(app)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
+          .send(validReqBody);
       });
 
       it("Should return a 400 status code", () => {
@@ -203,7 +193,7 @@ describe("Sprint router test suite", () => {
     context("With invalid 'accessToken'", () => {
       beforeAll(async () => {
         response = await supertest(app)
-          .post(`/sprint/${(createdProject as IProject)._id}`)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
           .set("Authorization", `Bearer qwerty123`)
           .send(validReqBody);
       });
@@ -217,10 +207,10 @@ describe("Sprint router test suite", () => {
       });
     });
 
-    context("With invalid 'projectId'", () => {
+    context("With invalid 'sprintId'", () => {
       beforeAll(async () => {
         response = await supertest(app)
-          .post(`/sprint/qwerty123`)
+          .post(`/task/qwerty123`)
           .set("Authorization", `Bearer ${accessToken}`)
           .send(validReqBody);
       });
@@ -229,9 +219,9 @@ describe("Sprint router test suite", () => {
         expect(response.status).toBe(400);
       });
 
-      it("Should say that 'projectId' is invalid", () => {
+      it("Should say that 'sprintId' is invalid", () => {
         expect(response.body.message).toBe(
-          "Invalid 'projectId'. Must be a MongoDB ObjectId"
+          "Invalid 'sprintId'. Must be a MongoDB ObjectId"
         );
       });
     });
@@ -239,7 +229,7 @@ describe("Sprint router test suite", () => {
     context("With another account", () => {
       beforeAll(async () => {
         response = await supertest(app)
-          .post(`/sprint/${(createdProject as IProject)._id}`)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
           .set("Authorization", `Bearer ${secondAccessToken}`)
           .send(validReqBody);
       });
@@ -248,8 +238,8 @@ describe("Sprint router test suite", () => {
         expect(response.status).toBe(404);
       });
 
-      it("Should say that project wasn't found", () => {
-        expect(response.body.message).toBe("Project not found");
+      it("Should say that sprint wasn't found", () => {
+        expect(response.body.message).toBe("Sprint not found");
       });
     });
   });

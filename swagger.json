@@ -19,15 +19,15 @@
     },
     {
       "name": "Project",
-      "description": "Project endpoints"
+      "description": "Projects endpoints"
     },
     {
       "name": "Sprint",
-      "description": "Sprint endpoints"
+      "description": "Sprints endpoints"
     },
     {
-      "name": "Habit",
-      "description": "Habits endpoints"
+      "name": "Task",
+      "description": "Tasks endpoints"
     },
     {
       "name": "Task",
@@ -264,7 +264,7 @@
             }
           },
           "400": {
-            "description": "Bad request (invalid request body) / No token provided",
+            "description": "Bad request (invalid request body or id) / No token provided",
             "content": {}
           },
           "401": {
@@ -273,6 +273,57 @@
           },
           "404": {
             "description": "Project not found / Invalid user / Invalid session",
+            "content": {}
+          }
+        }
+      }
+    },
+    "/task/{sprintId}": {
+      "post": {
+        "tags": ["Task"],
+        "summary": "Add a task",
+        "security": [{ "Bearer": [] }],
+        "parameters": [
+          {
+            "name": "sprintId",
+            "in": "path",
+            "required": true,
+            "description": "Sprint's id",
+            "type": "string"
+          }
+        ],
+        "requestBody": {
+          "description": "Task's object",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request (invalid request body or id) / No token provided",
+            "content": {}
+          },
+          "401": {
+            "description": "Unauthorized (invalid access token)",
+            "content": {}
+          },
+          "404": {
+            "description": "Sprint not found / Invalid user / Invalid session",
             "content": {}
           }
         }
@@ -1705,6 +1756,69 @@
           }
         }
       },
+      "TaskRequest": {
+        "required": ["title", "hoursPlanned"],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Tasks's title",
+            "example": "Task 1"
+          },
+          "hoursPlanned": {
+            "type": "integer",
+            "description": "Amount of hours planned for this task",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 8
+          }
+        }
+      },
+      "TaskResponse": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Task's title",
+            "example": "Task 1"
+          },
+          "hoursPlanned": {
+            "type": "integer",
+            "description": "Amount of hours planned for this task",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 8
+          },
+          "hoursWasted": {
+            "type": "integer",
+            "description": "Task's hours wasted (always 0 after creation)"
+          },
+          "hoursWastedPerDay": {
+            "type": "array",
+            "description": "Array of task's days",
+            "items": {
+              "type": "object",
+              "description": "Day's object",
+              "properties": {
+                "currentDay": {
+                  "type": "string",
+                  "description": "Day's date",
+                  "example": "2020-12-31"
+                },
+                "singleHoursWasted": {
+                  "type": "integer",
+                  "description": "Amount of hours spent on this task on this particular day"
+                }
+              }
+            }
+          },
+          "id": {
+            "type": "string",
+            "description": "Task's id",
+            "example": "507f1f77bcf86cd799439011"
+          }
+        }
+      },
       "PostHabitRequest": {
         "required": ["name", "rewardPerDay"],
         "type": "object",
@@ -1987,53 +2101,6 @@
             "minimum": 1,
             "description": "Days for a task to be completed (optional)",
             "example": 1
-          }
-        }
-      },
-      "TaskResponse": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Task's name",
-            "example": "Name of the task"
-          },
-          "reward": {
-            "type": "string",
-            "description": "Task's reward",
-            "minimum": 1,
-            "example": 1
-          },
-          "isCompleted": {
-            "type": "string",
-            "description": "Task's status",
-            "enum": ["unknown", "confirmed", "canceled"]
-          },
-          "daysToComplete": {
-            "type": "integer",
-            "description": "Amount of days to complete this task (optional)",
-            "minimum": 1,
-            "example": 1
-          },
-          "startDate": {
-            "type": "string",
-            "description": "Task's start date (if 'daysToComplete' field was provided)",
-            "example": "2020-12-31"
-          },
-          "endDate": {
-            "type": "string",
-            "description": "Task's end date (if 'daysToComplete' field was provided)",
-            "example": "2021-01-01"
-          },
-          "childId": {
-            "type": "string",
-            "description": "Id of the child whose task it is",
-            "example": "507f1f77bcf86cd799439011"
-          },
-          "id": {
-            "type": "string",
-            "description": "Task's id",
-            "example": "507f1f77bcf86cd799439012"
           }
         }
       },
