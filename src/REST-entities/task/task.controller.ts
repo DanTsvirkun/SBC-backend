@@ -1,11 +1,14 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { DateTime } from "luxon";
 import {
   IUser,
   ISprintPopulated,
+  IProject,
+  ITask,
 } from "../../helpers/typescript-helpers/interfaces";
 import SprintModel from "../sprint/sprint.model";
 import TaskModel from "./task.model";
+import ProjectModel from "../project/project.model";
 
 export const addTask = async (req: Request, res: Response) => {
   const user = req.user;
@@ -51,4 +54,93 @@ export const addTask = async (req: Request, res: Response) => {
     id: task._id,
     hoursWastedPerDay,
   });
+};
+
+export const loadTasks = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const user = req.user;
+  const { sprintId } = req.params;
+  const { search } = req.query;
+  const sprint = await SprintModel.findById(sprintId);
+  if (!sprint) {
+    return res.status(404).send({ message: "Sprint not found" });
+  }
+  const project = await ProjectModel.findById(sprint.projectId);
+  if (
+    !(project as IProject).members.find(
+      (email) => email === (user as IUser).email
+    )
+  ) {
+    return res
+      .status(403)
+      .send({ message: "You are not a contributor of this project" });
+  }
+  if (search) {
+    return SprintModel.findById(sprintId)
+      .populate("tasks")
+      .exec((err, data) => {
+        if (err) {
+          next(err);
+        }
+        const foundTasks = (data as ISprintPopulated).tasks.filter((task) =>
+          task.title.toLowerCase().includes((search as string).toLowerCase())
+        );
+        if (!foundTasks.length) {
+          return res.status(200).send({ message: "No tasks found" });
+        }
+        return res.status(200).send(foundTasks);
+      });
+  }
+  return SprintModel.findById(sprintId)
+    .populate("tasks")
+    .exec((err, data) => {
+      if (err) {
+        next();
+      }
+      if (!(data as ISprintPopulated).tasks.length) {
+        return res.status(200).send({ message: "No tasks found" });
+      }
+      return res.status(200).send((data as ISprintPopulated).tasks);
+    });
+};
+
+export const changeWastedHours = async (req: Request, res: Response) => {
+  const { taskId } = req.params;
+  const { date, hours } = req.body;
+  const task = await TaskModel.findById(taskId);
+  if (!task) {
+    return res.status(404).send({ message: "Task not found" });
+  }
+  const day = task.hoursWastedPerDay.find((day) => day.currentDay === date);
+  if (!day) {
+    return res.status(404).send({ message: "Day not found" });
+  }
+  if (hours > day.singleHoursWasted) {
+    const diff = hours - day.singleHoursWasted;
+    task.hoursWasted += diff;
+    day.singleHoursWasted = hours;
+    await task.save();
+    return res.status(200).send({ day, newWastedHours: task.hoursWasted });
+  }
+  if (hours < day.singleHoursWasted) {
+    const diff = day.singleHoursWasted - hours;
+    task.hoursWasted -= diff;
+    day.singleHoursWasted = hours;
+    await task.save();
+    return res.status(200).send({ day, newWastedHours: task.hoursWasted });
+  }
+  return res.status(200).send({ message: "You can't set the same hours" });
+};
+
+export const deleteTask = async (req: Request, res: Response) => {
+  const { taskId } = req.params;
+  const task = await TaskModel.findById(taskId);
+  if (!task) {
+    return res.status(404).send({ message: "Task not found" });
+  }
+  await TaskModel.findByIdAndDelete(taskId);
+  return res.status(204).end();
 };

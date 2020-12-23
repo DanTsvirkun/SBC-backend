@@ -6,12 +6,14 @@ import {
   IProjectPopulated,
   ISprint,
   ISprintPopulated,
+  ITask,
 } from "../../helpers/typescript-helpers/interfaces";
 import Server from "../../server/server";
 import UserModel from "../user/user.model";
 import SessionModel from "../session/session.model";
 import ProjectModel from "../project/project.model";
 import SprintModel from "../sprint/sprint.model";
+import taskModel from "../task/task.model";
 
 describe("Sprint router test suite", () => {
   let app: Application;
@@ -19,7 +21,9 @@ describe("Sprint router test suite", () => {
   let secondResponse: Response;
   let thirdResponse: Response;
   let fourthResponse: Response;
+  let fifthResponse: Response;
   let createdSprint: ISprint | ISprintPopulated | null;
+  let updatedSprint: ISprint | ISprintPopulated | null;
   let createdProject: IProject | IProjectPopulated | null;
   let updatedProject: IProject | IProjectPopulated | null;
   let accessToken: string;
@@ -45,26 +49,28 @@ describe("Sprint router test suite", () => {
       .post("/project")
       .set("Authorization", `Bearer ${accessToken}`)
       .send({ title: "Test", description: "Test" });
-    await supertest(app)
+    fourthResponse = await supertest(app)
       .post("/auth/register")
       .send({ email: "testt@email.com", password: "qwerty123" });
-    fourthResponse = await supertest(app)
+    fifthResponse = await supertest(app)
       .post("/auth/login")
       .send({ email: "testt@email.com", password: "qwerty123" });
-    secondAccessToken = fourthResponse.body.accessToken;
+    secondAccessToken = fifthResponse.body.accessToken;
     createdProject = await ProjectModel.findOne({ _id: thirdResponse.body.id });
   });
 
   afterAll(async () => {
     await UserModel.deleteOne({ email: response.body.email });
+    await UserModel.deleteOne({ email: fourthResponse.body.email });
     await SessionModel.deleteOne({ _id: secondResponse.body.sid });
+    await SessionModel.deleteOne({ _id: fifthResponse.body.sid });
     await ProjectModel.deleteOne({
       _id: thirdResponse.body.id,
     });
     await mongoose.connection.close();
   });
 
-  describe("POST /sprint", () => {
+  describe("POST /sprint/{projectId}", () => {
     let response: Response;
 
     const validReqBody = {
@@ -250,6 +256,342 @@ describe("Sprint router test suite", () => {
 
       it("Should say that project wasn't found", () => {
         expect(response.body.message).toBe("Project not found");
+      });
+    });
+  });
+
+  describe("GET /sprint/{projectId}", () => {
+    let response: Response;
+
+    it("Init endpoint testing", () => {
+      expect(true).toBe(true);
+    });
+
+    context("With validReqBody", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .get(`/sprint/${(createdProject as IProject)._id}`)
+          .set("Authorization", `Bearer ${accessToken}`);
+      });
+
+      it("Should return a 200 status code", () => {
+        expect(response.status).toBe(200);
+      });
+
+      it("Should return an expected result", () => {
+        expect(response.body).toEqual({
+          sprints: [
+            {
+              title: "Test",
+              startDate: "2020-12-31",
+              endDate: "2020-12-31",
+              duration: 1,
+              tasks: [],
+              projectId: (createdProject as IProject)._id.toString(),
+              _id: (createdSprint as ISprint)._id.toString(),
+              __v: 0,
+            },
+          ],
+        });
+      });
+    });
+
+    context("Without providing 'accessToken'", () => {
+      beforeAll(async () => {
+        response = await supertest(app).get(
+          `/sprint/${(createdProject as IProject)._id}`
+        );
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that token wasn't provided", () => {
+        expect(response.body.message).toBe("No token provided");
+      });
+    });
+
+    context("With invalid 'accessToken'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .get(`/sprint/${(createdProject as IProject)._id}`)
+          .set("Authorization", `Bearer qwerty123`);
+      });
+
+      it("Should return a 401 status code", () => {
+        expect(response.status).toBe(401);
+      });
+
+      it("Should return an unauthorized status", () => {
+        expect(response.body.message).toBe("Unauthorized");
+      });
+    });
+
+    context("With invalid 'projectId'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .get(`/sprint/qwerty123`)
+          .set("Authorization", `Bearer ${accessToken}`);
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that 'projectId' is invalid", () => {
+        expect(response.body.message).toBe(
+          "Invalid 'projectId'. Must be a MongoDB ObjectId"
+        );
+      });
+    });
+
+    context("With another account", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .get(`/sprint/${(createdProject as IProject)._id}`)
+          .set("Authorization", `Bearer ${secondAccessToken}`);
+      });
+
+      it("Should return a 403 status code", () => {
+        expect(response.status).toBe(403);
+      });
+
+      it("Should say that user isn't a part of the project", () => {
+        expect(response.body.message).toBe(
+          "You are not a contributor of this project"
+        );
+      });
+    });
+  });
+
+  describe("PATCH /sprint/title/{sprintId}", () => {
+    let response: Response;
+
+    const validReqBody = {
+      title: "Test2",
+    };
+
+    const invalidReqBody = {};
+
+    it("Init endpoint testing", () => {
+      expect(true).toBe(true);
+    });
+
+    context("With validReqBody", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .patch(`/sprint/title/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send(validReqBody);
+        updatedSprint = await SprintModel.findById(
+          (createdSprint as ISprint)._id
+        );
+      });
+
+      it("Should return a 200 status code", () => {
+        expect(response.status).toBe(200);
+      });
+
+      it("Should return an expected result", () => {
+        expect(response.body).toEqual({
+          newTitle: validReqBody.title,
+        });
+      });
+
+      it("Should update project in DB", () => {
+        expect((updatedSprint as ISprint).title).toBe("Test2");
+      });
+    });
+
+    context("With invalidReqBody", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .patch(`/sprint/title/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send(invalidReqBody);
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that 'title' is required", () => {
+        expect(response.body.message).toEqual('"title" is required');
+      });
+    });
+
+    context("Without providing 'accessToken'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .patch(`/sprint/title/${(createdSprint as ISprint)._id}`)
+          .send(validReqBody);
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that token wasn't provided", () => {
+        expect(response.body.message).toBe("No token provided");
+      });
+    });
+
+    context("With invalid 'accessToken'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .patch(`/sprint/title/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer qwerty123`)
+          .send(validReqBody);
+      });
+
+      it("Should return a 401 status code", () => {
+        expect(response.status).toBe(401);
+      });
+
+      it("Should return an unauthorized status", () => {
+        expect(response.body.message).toBe("Unauthorized");
+      });
+    });
+
+    context("With invalid 'sprintId'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .patch(`/sprint/title/qwerty123`)
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send(validReqBody);
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that 'sprintId' is invalid", () => {
+        expect(response.body.message).toBe(
+          "Invalid 'sprintId'. Must be a MongoDB ObjectId"
+        );
+      });
+    });
+
+    context("With another account", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .patch(`/sprint/title/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer ${secondAccessToken}`)
+          .send(validReqBody);
+      });
+
+      it("Should return a 404 status code", () => {
+        expect(response.status).toBe(404);
+      });
+
+      it("Should say that sprint wasn't found", () => {
+        expect(response.body.message).toBe("Sprint not found");
+      });
+    });
+  });
+
+  describe("DELETE /sprint/{sprintId}", () => {
+    let response: Response;
+    let task: Response;
+    let deletedSprint: ISprint | ISprintPopulated | null;
+    let deletedTask: ITask | null;
+
+    it("Init endpoint testing", () => {
+      expect(true).toBe(true);
+    });
+
+    context("With another account", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .delete(`/sprint/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer ${secondAccessToken}`);
+      });
+
+      it("Should return a 404 status code", () => {
+        expect(response.status).toBe(404);
+      });
+
+      it("Should say that sprint wasn't found", () => {
+        expect(response.body.message).toBe("Sprint not found");
+      });
+    });
+
+    context("With validReqBody", () => {
+      beforeAll(async () => {
+        task = await supertest(app)
+          .post(`/task/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send({ title: "Test", hoursPlanned: 1 });
+        response = await supertest(app)
+          .delete(`/sprint/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer ${accessToken}`);
+        deletedSprint = await SprintModel.findById(
+          (createdSprint as ISprint)._id
+        );
+        deletedTask = await taskModel.findById(task.body.id);
+      });
+
+      it("Should return a 204 status code", () => {
+        expect(response.status).toBe(204);
+      });
+
+      it("Should delete sprint from DB", () => {
+        expect(deletedSprint).toBeFalsy();
+      });
+
+      it("Should delete task from DB", () => {
+        expect(deletedTask).toBeFalsy();
+      });
+    });
+
+    context("Without providing 'accessToken'", () => {
+      beforeAll(async () => {
+        response = await supertest(app).delete(
+          `/sprint/${(createdSprint as ISprint)._id}`
+        );
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that token wasn't provided", () => {
+        expect(response.body.message).toBe("No token provided");
+      });
+    });
+
+    context("With invalid 'accessToken'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .delete(`/sprint/${(createdSprint as ISprint)._id}`)
+          .set("Authorization", `Bearer qwerty123`);
+      });
+
+      it("Should return a 401 status code", () => {
+        expect(response.status).toBe(401);
+      });
+
+      it("Should return an unauthorized status", () => {
+        expect(response.body.message).toBe("Unauthorized");
+      });
+    });
+
+    context("With invalid 'sprintId'", () => {
+      beforeAll(async () => {
+        response = await supertest(app)
+          .delete(`/sprint/qwerty123`)
+          .set("Authorization", `Bearer ${accessToken}`);
+      });
+
+      it("Should return a 400 status code", () => {
+        expect(response.status).toBe(400);
+      });
+
+      it("Should say that 'sprintId' is invalid", () => {
+        expect(response.body.message).toBe(
+          "Invalid 'sprintId'. Must be a MongoDB ObjectId"
+        );
       });
     });
   });

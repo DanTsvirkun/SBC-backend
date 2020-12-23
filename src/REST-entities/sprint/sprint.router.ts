@@ -4,7 +4,12 @@ import Joi from "joi";
 import { authorize } from "../../auth/auth.controller";
 import tryCatchWrapper from "../../helpers/function-helpers/try-catch-wrapper";
 import validate from "../../helpers/function-helpers/validate";
-import { addSprint } from "./sprint.controller";
+import {
+  addSprint,
+  loadSprints,
+  changeSprintTitle,
+  deleteSprint,
+} from "./sprint.controller";
 
 const addSprintSchema = Joi.object({
   title: Joi.string().required(),
@@ -23,7 +28,7 @@ const addSprintSchema = Joi.object({
   duration: Joi.number().required().min(1),
 });
 
-const addSprintIdSchema = Joi.object({
+export const addSprintIdSchema = Joi.object({
   projectId: Joi.string()
     .custom((value, helpers) => {
       const isValidObjectId = mongoose.Types.ObjectId.isValid(value);
@@ -37,6 +42,24 @@ const addSprintIdSchema = Joi.object({
     .required(),
 });
 
+export const patchSprintIdSchema = Joi.object({
+  sprintId: Joi.string()
+    .custom((value, helpers) => {
+      const isValidObjectId = mongoose.Types.ObjectId.isValid(value);
+      if (!isValidObjectId) {
+        return helpers.message({
+          custom: "Invalid 'sprintId'. Must be a MongoDB ObjectId",
+        });
+      }
+      return value;
+    })
+    .required(),
+});
+
+const changeTitleSchema = Joi.object({
+  title: Joi.string().required(),
+});
+
 const router = Router();
 
 router.post(
@@ -45,6 +68,25 @@ router.post(
   validate(addSprintIdSchema, "params"),
   validate(addSprintSchema),
   tryCatchWrapper(addSprint)
+);
+router.get(
+  "/:projectId",
+  tryCatchWrapper(authorize),
+  validate(addSprintIdSchema, "params"),
+  tryCatchWrapper(loadSprints)
+);
+router.patch(
+  "/title/:sprintId",
+  tryCatchWrapper(authorize),
+  validate(patchSprintIdSchema, "params"),
+  validate(changeTitleSchema),
+  tryCatchWrapper(changeSprintTitle)
+);
+router.delete(
+  "/:sprintId",
+  tryCatchWrapper(authorize),
+  validate(patchSprintIdSchema, "params"),
+  tryCatchWrapper(deleteSprint)
 );
 
 export default router;

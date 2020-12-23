@@ -10,6 +10,9 @@ import {
 import Server from "../server/server";
 import UserModel from "../REST-entities/user/user.model";
 import SessionModel from "../REST-entities/session/session.model";
+import ProjectModel from "../REST-entities/project/project.model";
+import TaskModel from "../REST-entities/task/task.model";
+import SprintModel from "../REST-entities/sprint/sprint.model";
 
 describe("Auth router test suite", () => {
   let app: Application;
@@ -17,6 +20,9 @@ describe("Auth router test suite", () => {
   let accessToken: string;
   let refreshToken: string;
   let sid: string;
+  let project: Response;
+  let sprint: Response;
+  let task: Response;
 
   beforeAll(async () => {
     app = new Server().startForTesting();
@@ -31,6 +37,9 @@ describe("Auth router test suite", () => {
 
   afterAll(async () => {
     await UserModel.deleteOne({ email: "test@email.com" });
+    await ProjectModel.deleteOne({ _id: project.body.id });
+    await SprintModel.deleteOne({ _id: sprint.body.id });
+    await TaskModel.deleteOne({ _id: task.body.id });
     await mongoose.connection.close();
   });
 
@@ -129,7 +138,7 @@ describe("Auth router test suite", () => {
     };
 
     const thirdInvalidReqBody = {
-      email: "tes@email.com",
+      email: "testt@email.com",
       password: "qwerty123",
     };
 
@@ -150,23 +159,6 @@ describe("Auth router test suite", () => {
       it("Should return a 200 status code", () => {
         expect(response.status).toBe(200);
       });
-
-      // =============
-
-      it("Should return an expected result", () => {
-        expect(response.body).toEqual({
-          accessToken,
-          refreshToken,
-          sid,
-          data: {
-            projects: [],
-            id: (user as IUser)._id.toString(),
-            email: validReqBody.email,
-          },
-        });
-      });
-
-      // =============
 
       it("Should create valid 'accessToken'", () => {
         expect(
@@ -192,6 +184,74 @@ describe("Auth router test suite", () => {
 
       it("Should create a new session", () => {
         expect(createdSession).toBeTruthy();
+      });
+    });
+
+    context("To check the body (with accessToken)", () => {
+      beforeAll(async () => {
+        project = await supertest(app)
+          .post("/project")
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send({ title: "Project", description: "Project" });
+        sprint = await supertest(app)
+          .post(`/sprint/${project.body.id}`)
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send({ title: "Sprint", duration: 2, endDate: "2020-12-31" });
+        task = await supertest(app)
+          .post(`/task/${sprint.body.id}`)
+          .set("Authorization", `Bearer ${accessToken}`)
+          .send({ title: "Task", hoursPlanned: 1 });
+        response = await supertest(app).post("/auth/login").send(validReqBody);
+        createdSession = await SessionModel.findById(response.body.sid);
+        user = await UserModel.findById(response.body.data.id);
+        accessToken = response.body.accessToken;
+        refreshToken = response.body.refreshToken;
+        sid = (createdSession as ISession)._id.toString();
+      });
+
+      it("Should return an expected result", () => {
+        expect(response.body).toEqual({
+          accessToken,
+          refreshToken,
+          sid,
+          data: {
+            projects: [
+              {
+                title: "Project",
+                description: "Project",
+                members: ["test@email.com"],
+                _id: project.body.id,
+                __v: 1,
+                sprints: [
+                  {
+                    title: "Sprint",
+                    startDate: "2020-12-30",
+                    endDate: "2020-12-31",
+                    duration: 2,
+                    projectId: project.body.id,
+                    _id: sprint.body.id,
+                    __v: 1,
+                    tasks: [
+                      {
+                        title: "Task",
+                        hoursPlanned: 1,
+                        hoursWasted: 0,
+                        hoursWastedPerDay: [
+                          { currentDay: "2020-12-30", singleHoursWasted: 0 },
+                          { currentDay: "2020-12-31", singleHoursWasted: 0 },
+                        ],
+                        _id: task.body.id,
+                        __v: 0,
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            id: (user as IUser)._id.toString(),
+            email: validReqBody.email,
+          },
+        });
       });
     });
 
