@@ -30,7 +30,9 @@ export const addSprint = async (req: Request, res: Response) => {
     Number(endDateArr[1]),
     Number(endDateArr[2])
   );
-  const startDate = endDateObj.minus({ days: duration - 1 }).toLocaleString();
+  const startDate = endDateObj
+    .minus({ days: duration - 1 })
+    .toFormat("yyyy-MM-dd");
   const sprint = await SprintModel.create({
     title,
     startDate,

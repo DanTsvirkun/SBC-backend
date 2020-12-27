@@ -35,7 +35,7 @@ export const addTask = async (req: Request, res: Response) => {
   );
   for (let i = 0; i < sprint.duration; i++) {
     hoursWastedPerDay.push({
-      currentDay: startDateObj.plus({ days: i }).toLocaleString(),
+      currentDay: startDateObj.plus({ days: i }).toFormat("yyyy-MM-dd"),
       singleHoursWasted: 0,
     });
   }

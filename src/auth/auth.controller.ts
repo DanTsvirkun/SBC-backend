@@ -47,9 +47,6 @@ export const login = async (
       .status(403)
       .send({ message: `User with ${email} email doesn't exist` });
   }
-  if (!user.passwordHash) {
-    return res.status(403).send({ message: "Forbidden" });
-  }
   const isPasswordCorrect = await bcrypt.compare(password, user.passwordHash);
   if (!isPasswordCorrect) {
     return res.status(403).send({ message: "Password is wrong" });
